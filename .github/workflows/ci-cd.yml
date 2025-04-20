@@ -30,63 +30,41 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Debug: Show environment
-        run: |
-          echo "Python version:"
-          python --version
-          echo "PATH:"
-          echo $PATH
-          echo "Installed packages:"
-          pip list
-
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver xvfb
-          sudo ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver
-
-      - name: Install Python dependencies
-        run: |
+          sudo apt-get install -y chromium-browser chromium-chromedriver
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest pytest-cov psycopg2-binary selenium
 
       - name: Wait for PostgreSQL
         run: |
-          for i in {1..15}; do
+          for i in {1..10}; do
             pg_isready -h localhost -p 5432 && break
             sleep 2
           done
 
-      - name: Run tests with Xvfb
+      - name: Run tests
         env:
           DISPLAY: ":99"
+          POSTGRES_URL: ${{ env.POSTGRES_URL }}
         run: |
           Xvfb :99 -screen 0 1280x1024x24 &
-          export PATH=$PATH:/usr/bin/chromedriver
-          pytest --cov=./ --cov-report=xml --durations=5 -v tests/ || echo "Pytest exited with code $?"
+          export PATH=$PATH:/usr/lib/chromium-browser/
+          pytest --cov=./ --cov-report=xml --durations=5 -v tests/
 
-      - name: Check coverage file
-        run: |
-          if [ ! -f coverage.xml ]; then
-            echo "Error: coverage.xml not found!"
-            exit 1
-          fi
-          echo "Coverage file exists with size: $(wc -c < coverage.xml) bytes"
-
-      - name: Upload to Codecov (non-blocking)
-        if: always()
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          if [ -f coverage.xml ]; then
-            curl -s https://codecov.io/bash | bash -s -- -t $CODECOV_TOKEN -f coverage.xml -n "GitHub Actions" -F unittests -v || echo "Codecov upload failed"
-          else
-            echo "Skipping Codecov upload - no coverage file"
-          fi
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          verbose: true
+          fail_ci_if_error: false
