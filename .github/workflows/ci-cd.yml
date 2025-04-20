@@ -7,7 +7,6 @@ on:
     branches: [main]
 
 env:
-  POSTGRES_VERSION: '13'
   PYTHON_VERSION: '3.10'
 
 jobs:
@@ -16,7 +15,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:13  # Use the version directly here instead of env var
+        image: postgres:13
         ports:
           - 5432:5432
         env:
@@ -30,8 +29,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -42,16 +40,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov psycopg2-binary
 
-      - name: Run tests with coverage
-        env:
-          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/test_db
+      - name: Install Chrome for Selenium
         run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+          sudo ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver
+          export PATH=$PATH:/usr/local/bin
+
+      - name: Run tests
+        env:
+          POSTGRES_URL: "postgresql://postgres:postgres@localhost:5432/test_db"
+          DISPLAY: ":99"
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          timeout 20s bash -c 'until pg_isready -h localhost -p 5432; do sleep 1; done'
           pytest --cov=./ tests/
 
       - name: Upload coverage to Codecov
+        if: success()
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: sailakshmi223/test-price
+          file: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
