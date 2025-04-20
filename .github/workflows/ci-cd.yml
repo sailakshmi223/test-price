@@ -13,6 +13,7 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       postgres:
@@ -33,38 +34,81 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Debug: Initial environment
+        run: |
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          ls -la
+          echo "Python version:"
+          python --version || echo "Python not found"
+
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Install Chrome and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver
+          sudo apt-get install -y chromium-browser chromium-chromedriver xvfb
+          sudo ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver
+          echo "Chrome version:"
+          chromium-browser --version || echo "Chrome not installed"
+          echo "Chromedriver version:"
+          chromedriver --version || echo "Chromedriver not found"
+
+      - name: Install Python packages
+        run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest pytest-cov psycopg2-binary selenium
+          echo "Installed packages:"
+          pip list
 
-      - name: Wait for PostgreSQL
+      - name: Verify PostgreSQL
         run: |
+          echo "Waiting for PostgreSQL..."
           for i in {1..10}; do
-            pg_isready -h localhost -p 5432 && break
+            pg_isready -h localhost -p 5432 && {
+              echo "PostgreSQL is ready!"
+              exit 0
+            }
             sleep 2
+            echo "Attempt $i/10: PostgreSQL not ready"
           done
+          echo "PostgreSQL failed to start"
+          exit 1
 
-      - name: Run tests
+      - name: Run tests with Xvfb
         env:
           DISPLAY: ":99"
           POSTGRES_URL: ${{ env.POSTGRES_URL }}
         run: |
-          Xvfb :99 -screen 0 1280x1024x24 &
-          export PATH=$PATH:/usr/lib/chromium-browser/
+          echo "Starting Xvfb..."
+          Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          echo "Checking Xvfb..."
+          ps aux | grep Xvfb
+          echo "Running tests..."
           pytest --cov=./ --cov-report=xml --durations=5 -v tests/
+          TEST_EXIT=$?
+          echo "Pytest exited with code: $TEST_EXIT"
+          exit $TEST_EXIT
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage
+        if: always()
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
           verbose: true
           fail_ci_if_error: false
+
+      - name: Final diagnostics
+        if: always()
+        run: |
+          echo "=== Final Environment ==="
+          echo "PATH: $PATH"
+          echo "Python path: $(which python)"
+          echo "Chromedriver path: $(which chromedriver)"
+          echo "Coverage file:"
+          ls -la coverage.xml || echo "No coverage file found"
+          echo "Test artifacts:"
+          ls -la
