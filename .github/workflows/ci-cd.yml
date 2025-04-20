@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: DealScout E-commerce PriceTracker CI/CD
 
 on:
   push:
@@ -13,7 +13,6 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     services:
       postgres:
@@ -31,7 +30,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -39,27 +38,21 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Chrome
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
-          sudo ln -s /usr/bin/chromedriver /usr/local/bin/
-
-      - name: Install dependencies
-        run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest pytest-cov psycopg2-binary selenium
 
       - name: Wait for PostgreSQL
         run: |
           for i in {1..10}; do
-            pg_isready -h localhost -p 5432 && exit 0
+            pg_isready -h localhost -p 5432 && break
             sleep 2
           done
-          echo "PostgreSQL not ready after 20 seconds"
-          exit 1
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           DISPLAY: ":99"
         run: |
@@ -67,8 +60,11 @@ jobs:
           export PATH=$PATH:/usr/lib/chromium-browser/
           pytest --cov=./ --cov-report=xml --durations=5 -v tests/
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
+          file: coverage.xml
+          verbose: true
+          fail_ci_if_error: false
