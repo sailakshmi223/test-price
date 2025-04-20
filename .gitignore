@@ -1,0 +1,30 @@
+# Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Virtual environment directories
+venv/
+env/
+
+# IDE-specific files (for VS Code)
+.vscode/
+
+# Log files
+*.log
+
+# Environment variable files
+.env
+
+# Python distribution packaging
+*.egg-info/
+dist/
+build/
+eggs/
+
+# Database files (if any)
+*.sqlite3
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+ 

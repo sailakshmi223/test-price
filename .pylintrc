@@ -1,0 +1,16 @@
+[MASTER]
+disable=
+    C0114, C0115, C0116,  # Missing docstrings
+    W0511,  # TODO/FIXME comments
+    R0903,  # Too few public methods
+    R0913,  # Too many arguments
+    R0914,  # Too many local variables
+    R0902,  # Too many instance attributes
+    W1203,  # Logging f-strings
+    C0301,  # Line too long
+
+[MESSAGES CONTROL]
+max-line-length=120
+
+[FORMAT]
+max-module-lines=1500
