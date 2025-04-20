@@ -57,13 +57,21 @@ jobs:
         run: |
           Xvfb :99 -screen 0 1280x1024x24 &
           export PATH=$PATH:/usr/lib/chromium-browser/
-          pytest --cov=./ --cov-report=xml --durations=5 -v tests/ || echo "Tests completed with exit code $?"
+          pytest --cov=./ --cov-report=xml --cov-report=term --durations=5 -v tests/
 
-      - name: Upload coverage (non-blocking)
-        if: always()
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          verbose: true
-          fail_ci_if_error: false
+      - name: Validate coverage file
+        run: |
+          ls -la
+          [ -f coverage.xml ] || exit 1
+          echo "Coverage file exists with size: $(wc -c < coverage.xml) bytes"
+
+      - name: Upload to Codecov (Bash method)
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          # Method 1: Direct curl upload
+          curl -s https://codecov.io/bash | bash -s -- -t $CODECOV_TOKEN -f coverage.xml -n "GitHub Actions" -F unittests -v
+          
+          # Alternative method if above fails
+          # pip install codecov
+          # python -m codecov --token=$CODECOV_TOKEN --file=coverage.xml
